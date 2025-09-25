@@ -26,6 +26,8 @@ struct ContentView: View {
     @State private var commandHistory: [String]
     @FocusState private var isCommandFieldFocused: Bool
     @State private var currentUIMode: UIMode = .serialPortSelection
+
+    private let maxLogEntries = 1000
     
     @State private var logSaveURL: URL?
     @State private var logFilename: String = ""
@@ -209,6 +211,11 @@ struct ContentView: View {
                 serialPortManager.onDataReceived = { message in
                     let newEntry = LogEntry(timestamp: Date(), message: message)
                     logEntries.append(newEntry)
+
+                    // Limit log entries to prevent performance issues
+                    if logEntries.count > maxLogEntries {
+                        logEntries.removeFirst(logEntries.count - maxLogEntries)
+                    }
                 }
             }
 
