@@ -1,0 +1,62 @@
+<svg width="200" height="200" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <!-- 
+    PortPal Icon SVG (Final - Enlarged & Repositioned)
+    - Icon moved up to create better spacing with the text.
+  -->
+
+  <!-- 1. Background -->
+  <rect width="100" height="100" rx="22" ry="22" fill="#7BC6F6"/>
+
+  <!-- 2. PortPal Character Group (Position Adjusted) -->
+  <!-- Y-translate value changed from -16 to -19 to move the icon up -->
+  <g id="portpal-character" transform="translate(-5, -19) scale(1.1)">
+    
+    <!-- Part 1 & 2: Head and Face Section -->
+    <g id="head-and-face">
+      <!-- Top head part -->
+      <rect x="28" y="45.5" width="44" height="7.5" rx="3" ry="3" fill="#E1E4E8" stroke="#3D4752" stroke-width="2.5"/>
+      
+      <!-- Middle face body -->
+      <rect x="23" y="53" width="54" height="20" rx="4" ry="4" fill="#E1E4E8" stroke="#3D4752" stroke-width="2.5"/>
+      
+      <!-- Face Elements -->
+      <g id="face" fill="#3D4752">
+        <circle cx="43" cy="63" r="2.5"/>
+        <circle cx="57" cy="63" r="2.5"/>
+        <path d="M 47 68 Q 50 71, 53 68" stroke="#3D4752" stroke-width="2" fill="none" stroke-linecap="round"/>
+      </g>
+
+      <!-- Side Mounts -->
+      <g id="side-mounts">
+        <circle cx="30" cy="63" r="2.7" fill="#C6C8CC" stroke="#3D4752" stroke-width="2.5"/>
+        <circle cx="70" cy="63" r="2.7" fill="#C6C8CC" stroke="#3D4752" stroke-width="2.5"/>
+      </g>
+    </g>
+    
+    <!-- Part 3: Serial Port Section -->
+    <g id="serial-port-base">
+      <!-- Outer trapezoid shell -->
+      <path d="M 28 73 L 32 85 L 68 85 L 72 73 Z" fill="#C6C8CC" stroke="#3D4752" stroke-width="2.5" stroke-linejoin="round"/>
+      
+      <!-- Inner plate for pins -->
+      <path d="M 33 74.5 L 36 83 L 64 83 L 67 74.5 Z" fill="#E1E4E8"/>
+      
+      <!-- Pins -->
+      <g id="pins" fill="#3D4752">
+        <circle cx="40" cy="77.5" r="1.2"/>
+        <circle cx="45" cy="77.5" r="1.2"/>
+        <circle cx="50" cy="77.5" r="1.2"/>
+        <circle cx="55" cy="77.5" r="1.2"/>
+        <circle cx="60" cy="77.5" r="1.2"/>
+        <circle cx="42.5" cy="81" r="1.2"/>
+        <circle cx="47.5" cy="81" r="1.2"/>
+        <circle cx="52.5" cy="81" r="1.2"/>
+        <circle cx="57.5" cy="81" r="1.2"/>
+      </g>
+    </g>
+  </g>
+  
+  <!-- 3. Text -->
+  <text x="50" y="92" font-size="16" font-weight="bold" text-anchor="middle" fill="#3D4752">PortPal</text>
+  
+</svg>
