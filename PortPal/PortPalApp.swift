@@ -1,4 +1,74 @@
 import SwiftUI
+import AppKit
+
+struct AutoScrollingTextEditor: NSViewRepresentable {
+    @Binding var text: String
+    let font: NSFont
+    @Binding var shouldAutoScroll: Bool
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(self)
+    }
+
+    class Coordinator: NSObject {
+        var parent: AutoScrollingTextEditor
+
+        init(_ parent: AutoScrollingTextEditor) {
+            self.parent = parent
+        }
+
+        @objc func scrollViewDidScroll(_ notification: Notification) {
+            guard let scrollView = notification.object as? NSScrollView,
+                  let textView = scrollView.documentView as? NSTextView else { return }
+
+            let scrollPosition = scrollView.documentVisibleRect
+            let contentHeight = textView.frame.height
+            let visibleHeight = scrollView.frame.height
+
+            // Check if user is at or near the bottom
+            let isAtBottom = scrollPosition.origin.y + visibleHeight >= contentHeight - 50
+
+            DispatchQueue.main.async {
+                self.parent.shouldAutoScroll = isAtBottom
+            }
+        }
+    }
+
+    func makeNSView(context: Context) -> NSScrollView {
+        let scrollView = NSTextView.scrollableTextView()
+        let textView = scrollView.documentView as! NSTextView
+
+        textView.font = font
+        textView.isEditable = false
+        textView.isSelectable = true
+        textView.backgroundColor = NSColor.textBackgroundColor
+        textView.textContainerInset = CGSize(width: 8, height: 8)
+
+        // Add scroll listener
+        NotificationCenter.default.addObserver(
+            context.coordinator,
+            selector: #selector(Coordinator.scrollViewDidScroll(_:)),
+            name: NSScrollView.didLiveScrollNotification,
+            object: scrollView
+        )
+
+        return scrollView
+    }
+
+    func updateNSView(_ nsView: NSScrollView, context: Context) {
+        guard let textView = nsView.documentView as? NSTextView else { return }
+
+        if textView.string != text {
+            textView.string = text
+
+            if shouldAutoScroll {
+                DispatchQueue.main.async {
+                    textView.scrollToEndOfDocument(nil)
+                }
+            }
+        }
+    }
+}
 
 @main
 struct PortPalApp: App {
@@ -26,6 +96,9 @@ struct ContentView: View {
     @State private var commandHistory: [String]
     @FocusState private var isCommandFieldFocused: Bool
     @State private var currentUIMode: UIMode = .serialPortSelection
+    @State private var isLeftPanelVisible = true
+    @State private var selectedPortLocal: String?
+    @State private var isAutoScrollEnabled = true
 
     private let maxLogEntries = 1000
     
@@ -54,7 +127,8 @@ struct ContentView: View {
 
     var body: some View {
         HSplitView {
-            VStack {
+            if isLeftPanelVisible {
+                VStack {
                 Picker("", selection: $currentUIMode) {
                     ForEach(UIMode.allCases) {
                         mode in
@@ -99,7 +173,7 @@ struct ContentView: View {
                         }
                         .disabled(serialPortManager.isOpen)
                         
-                        List(selection: $serialPortManager.selectedPort) {
+                        List(selection: $selectedPortLocal) {
                             ForEach(serialPortManager.serialPorts, id: \.self) { port in
                                 Text(port)
                                     .listRowBackground(
@@ -108,8 +182,21 @@ struct ContentView: View {
                                     .tag(port)
                             }
                         }
+                        .onChange(of: selectedPortLocal) { _, newValue in
+                            DispatchQueue.main.async {
+                                serialPortManager.selectedPort = newValue
+                            }
+                        }
+                        .onChange(of: serialPortManager.selectedPort) { _, newValue in
+                            if selectedPortLocal != newValue {
+                                selectedPortLocal = newValue
+                            }
+                        }
+                        .onAppear {
+                            selectedPortLocal = serialPortManager.selectedPort
+                        }
                         
-                        HStack {
+                        HStack(alignment: .center, spacing: 12) {
                             Button("Open") {
                                 if let port = serialPortManager.selectedPort {
                                     serialPortManager.openPort(path: port)
@@ -117,14 +204,15 @@ struct ContentView: View {
                             }
                             .buttonStyle(.bordered)
                             .disabled(serialPortManager.selectedPort == nil || serialPortManager.isOpen)
-                            
+
                             Button("Close") {
                                 serialPortManager.closePort()
                             }
                             .buttonStyle(.bordered)
                             .disabled(!serialPortManager.isOpen)
                         }
-                        .padding(.bottom)
+                        .frame(height: 44)
+                        .padding(.horizontal, 12)
                     }
                 case .highlightSettings:
                     HighlightSettingsView(settings: highlightSettings)
@@ -178,7 +266,8 @@ struct ContentView: View {
                             .disabled(logSaveURL == nil || logFilename.isEmpty)
                         }
                     }
-                    .padding()
+                    .frame(minHeight: 44)
+                    .padding(.horizontal, 12)
                     .onAppear(perform: generateFilename)
 
                 case .commandHistory:
@@ -209,58 +298,67 @@ struct ContentView: View {
             .onAppear {
                 serialPortManager.findSerialPorts()
                 serialPortManager.onDataReceived = { message in
-                    let newEntry = LogEntry(timestamp: Date(), message: message)
-                    logEntries.append(newEntry)
+                    DispatchQueue.main.async {
+                        let newEntry = LogEntry(timestamp: Date(), message: message)
+                        logEntries.append(newEntry)
 
-                    // Limit log entries to prevent performance issues
-                    if logEntries.count > maxLogEntries {
-                        logEntries.removeFirst(logEntries.count - maxLogEntries)
+                        // Limit log entries to prevent performance issues
+                        if logEntries.count > maxLogEntries {
+                            logEntries.removeFirst(logEntries.count - maxLogEntries)
+                        }
                     }
                 }
             }
+            }
 
             VStack {
-                ScrollViewReader {
-                    scrollView in
-                    ScrollView {
-                        LazyVStack(alignment: .leading) {
-                            ForEach(logEntries) {
-                                entry in
-                                HStack {
-                                    Text("[" + dateFormatter.string(from: entry.timestamp) + "]")
-                                        .foregroundColor(.gray)
-                                    highlightedText(for: entry.message)
-                                    Spacer()
-                                }
-                                .font(.custom("Monaco", size: 11))
-                                .padding(.horizontal, 4)
-                                .id(entry.id)
-                            }
-                        }
-                        .padding(.vertical, 5)
-                    }
-                    .background(Color.white)
-                    .onChange(of: logEntries.count) {
-                        if let last = logEntries.last {
-                            scrollView.scrollTo(last.id, anchor: .bottom)
-                        }
-                    }
-                }
+                AutoScrollingTextEditor(
+                    text: .constant(logText),
+                    font: NSFont.monospacedSystemFont(ofSize: 11, weight: .regular),
+                    shouldAutoScroll: $isAutoScrollEnabled
+                )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-                HStack {
+                HStack(alignment: .bottom, spacing: 6) {
+                    Button(action: {
+                        withAnimation(.easeInOut(duration: 0.3)) {
+                            isLeftPanelVisible.toggle()
+                        }
+                    }) {
+                        Image(systemName: isLeftPanelVisible ? "chevron.left.square" : "chevron.right.square")
+                            .foregroundColor(.accentColor)
+                            .font(.title3)
+                    }
+                    .buttonStyle(.plain)
+                    .frame(height: 20)
+                    .help("hide/unhide option panel")
+
+                    Button(action: clearScreen) {
+                        Image(systemName: "trash")
+                            .foregroundColor(.secondary)
+                            .font(.title3)
+                    }
+                    .buttonStyle(.plain)
+                    .frame(height: 20)
+                    .help("Clear screen")
+
                     TextField("Enter command", text: $command)
-                        .textFieldStyle(.roundedBorder)
+                        .textFieldStyle(.plain)
                         .foregroundColor(.primary)
+                        .frame(height: 20)
+                        .padding(.horizontal, 8)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 6)
+                                .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+                        )
                         .focused($isCommandFieldFocused)
                         .onSubmit {
                             sendFromTextField()
                         }
-                    Button("Send") {
-                        sendFromTextField()
-                    }
                 }
-                .padding()
+
+                .padding(.vertical, 6)
+                .padding(.horizontal, 12)
             }
         }
         .frame(minWidth: 800, minHeight: 600)
@@ -269,28 +367,37 @@ struct ContentView: View {
         }
     }
 
-    private func executeCommand(_ commandToExecute: String) {
+    func executeCommand(_ commandToExecute: String) {
         let trimmedCommand = commandToExecute.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedCommand.isEmpty else { return }
 
         // Remove existing instances of the command from history
-        commandHistory.removeAll { $0 == trimmedCommand } 
-        
+        commandHistory.removeAll { $0 == trimmedCommand }
+
         // Add the new command to the end of the history
         commandHistory.append(trimmedCommand)
-        
+
         saveCommandHistory()
 
         serialPortManager.send(trimmedCommand + "\n")
         isCommandFieldFocused = true
     }
 
-    private func sendFromTextField() {
-        executeCommand(command)
+    func sendFromTextField() {
+        let trimmedCommand = command.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        if trimmedCommand.isEmpty {
+            // Send just line feed if command is empty
+            serialPortManager.send("\n")
+        } else {
+            // Execute the command (which includes adding to history)
+            executeCommand(command)
+        }
+
         command = ""
     }
     
-    private func chooseLogDirectory() {
+    func chooseLogDirectory() {
         let panel = NSOpenPanel()
         panel.canChooseFiles = false
         panel.canChooseDirectories = true
@@ -308,9 +415,9 @@ struct ContentView: View {
         }
     }
     
-    private func startLogging() {
+    func startLogging() {
         guard let directoryURL = logSaveURL else { return }
-        
+
         guard directoryURL.startAccessingSecurityScopedResource() else {
             print("Failed to start accessing security-scoped resource.")
             return
@@ -318,10 +425,10 @@ struct ContentView: View {
         defer { directoryURL.stopAccessingSecurityScopedResource() }
 
         let fileURL = directoryURL.appendingPathComponent(logFilename)
-        
+
         // Write existing logs first
         let logContent = logEntries.map { "[\(dateFormatter.string(from: $0.timestamp))] \($0.message)" }.joined(separator: "\n") + "\n"
-        
+
         do {
             try logContent.write(to: fileURL, atomically: true, encoding: .utf8)
             serialPortManager.startLiveLogging(fileURL: fileURL)
@@ -330,11 +437,11 @@ struct ContentView: View {
         }
     }
     
-    private func stopLogging() {
+    func stopLogging() {
         serialPortManager.stopLiveLogging()
     }
-    
-    private func generateFilename() {
+
+    func generateFilename() {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyyMMddHHmm"
         if !serialPortManager.isLiveLogging {
@@ -342,56 +449,67 @@ struct ContentView: View {
         }
     }
 
-    private func removeCommandFromHistory(_ commandToRemove: String) {
+    func removeCommandFromHistory(_ commandToRemove: String) {
         commandHistory.removeAll { $0 == commandToRemove }
         saveCommandHistory()
     }
 
-    private func saveCommandHistory() {
+    func saveCommandHistory() {
         UserDefaults.standard.set(commandHistory, forKey: commandHistoryKey)
     }
 
-    // 하이라이트 텍스트를 생성하는 함수
-    private func highlightedText(for message: String) -> Text {
+    func clearScreen() {
+        logEntries.removeAll()
+    }
+
+    var logText: String {
+        logEntries.map { entry in
+            "[\(dateFormatter.string(from: entry.timestamp))] \(entry.message)"
+        }.joined(separator: "\n")
+    }
+
+    func highlightedText(for message: String) -> Text {
         var result: Text = Text("")
-        
-        // 정규표현식을 사용하여 모든 키워드를 한 번에 찾음
+
         let keywords = highlightSettings.keywords.filter { $0.isEnabled && !$0.keyword.isEmpty }
-        guard !keywords.isEmpty else { 
+        guard !keywords.isEmpty else {
             return Text(message)
         }
-        
+
         let pattern = keywords.map { NSRegularExpression.escapedPattern(for: $0.keyword) }.joined(separator: "|")
-        
-        guard let regex = try? NSRegularExpression(pattern: pattern, options: []) else { 
+
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: []) else {
             return Text(message)
         }
-        
+
         let matches = regex.matches(in: message, options: [], range: NSRange(message.startIndex..., in: message))
-        
+
         var lastIndex = message.startIndex
         for match in matches {
             guard let range = Range(match.range, in: message) else { continue }
-            
-            // 키워드 앞의 일반 텍스트 추가
+
             if range.lowerBound > lastIndex {
                 result = result + Text(message[lastIndex..<range.lowerBound])
             }
-            
-            // 하이라이트된 키워드 추가
+
             let keywordString = String(message[range])
             if let highlight = keywords.first(where: { $0.keyword == keywordString }) {
                 result = result + Text(keywordString).foregroundColor(highlight.swiftUIColor)
             }
-            
+
             lastIndex = range.upperBound
         }
-        
-        // 마지막 키워드 뒤의 나머지 텍스트 추가
+
         if lastIndex < message.endIndex {
             result = result + Text(message[lastIndex...])
         }
-        
+
         return result
+    }
+}
+
+struct ContentView_Previews: PreviewProvider {
+    static var previews: some View {
+        ContentView()
     }
 }

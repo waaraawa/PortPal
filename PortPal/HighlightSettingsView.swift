@@ -28,6 +28,7 @@ struct HighlightSettingsView: View {
             }
             .padding()
         }
-        .padding()
+        .frame(minHeight: 44)
+        .padding(.horizontal, 12)
     }
 }

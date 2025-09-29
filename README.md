@@ -3,7 +3,7 @@ Serial application app for Mac OS X
 ### v1.1.0 To-Do
 - [x] add readme.md
 - [ ] when app collect many logs then slow downed
-- [ ] Make hide/unhide option panels 
+- [x] Make hide/unhide option panels 
 - Ports
     - [ ] open/close port by double click
     - [ ] CR, LF selectable
@@ -15,12 +15,12 @@ Serial application app for Mac OS X
 - History
     - [ ] make history sorted by count, latest
 - Output window
-    - [ ] screen clear
-    - [ ] make to copy text from log
-    - [ ] make to send empty line feed only
-    - [ ] command input border is too thick
-    - [ ] stop scroll when scroll up
-    - [ ] continue scroll when scroll down to bottom again
+    - [x] screen clear
+    - [x] make to copy text from log
+    - [x] make to send empty line feed only
+    - [x] command input border is too thick
+    - [x] stop scroll when scroll up
+    - [x] continue scroll when scroll down to bottom again
 - Macro: new feature
     - [ ] command, enable disable
     - [ ] delay between commands
