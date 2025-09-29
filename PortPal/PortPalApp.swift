@@ -6,6 +6,7 @@ struct AutoScrollingTextEditor: NSViewRepresentable {
     let font: NSFont
     @Binding var shouldAutoScroll: Bool
     let isPortOpen: Bool
+    let highlightSettings: HighlightSettings
 
     func makeCoordinator() -> Coordinator {
         Coordinator(self)
@@ -63,7 +64,8 @@ struct AutoScrollingTextEditor: NSViewRepresentable {
         textView.backgroundColor = isPortOpen ? NSColor.textBackgroundColor : NSColor.windowBackgroundColor
 
         if textView.string != text {
-            textView.string = text
+            // Apply highlighting to the text
+            applyHighlighting(to: textView, text: text)
 
             if shouldAutoScroll {
                 DispatchQueue.main.async {
@@ -71,6 +73,34 @@ struct AutoScrollingTextEditor: NSViewRepresentable {
                 }
             }
         }
+    }
+
+    private func applyHighlighting(to textView: NSTextView, text: String) {
+        let attributedString = NSMutableAttributedString(string: text)
+
+        // Set default attributes
+        let defaultAttributes: [NSAttributedString.Key: Any] = [
+            .font: font,
+            .foregroundColor: NSColor.textColor
+        ]
+        attributedString.setAttributes(defaultAttributes, range: NSRange(location: 0, length: text.count))
+
+        // Apply highlighting for enabled keywords
+        let enabledKeywords = highlightSettings.keywords.filter { $0.isEnabled && !$0.keyword.isEmpty }
+
+        for keyword in enabledKeywords {
+            let pattern = NSRegularExpression.escapedPattern(for: keyword.keyword)
+            guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else { continue }
+
+            let matches = regex.matches(in: text, options: [], range: NSRange(location: 0, length: text.count))
+
+            for match in matches {
+                let nsColor = NSColor(keyword.swiftUIColor)
+                attributedString.addAttribute(.foregroundColor, value: nsColor, range: match.range)
+            }
+        }
+
+        textView.textStorage?.setAttributedString(attributedString)
     }
 }
 
@@ -342,6 +372,9 @@ struct ContentView: View {
                         if logEntries.count > maxLogEntries {
                             logEntries.removeFirst(logEntries.count - maxLogEntries)
                         }
+
+                        // Check for keyword matches and trigger notifications
+                        checkForKeywordMatches(in: message)
                     }
                 }
             }
@@ -352,7 +385,8 @@ struct ContentView: View {
                     text: .constant(logText),
                     font: NSFont.monospacedSystemFont(ofSize: 11, weight: .regular),
                     shouldAutoScroll: $isAutoScrollEnabled,
-                    isPortOpen: serialPortManager.isOpen
+                    isPortOpen: serialPortManager.isOpen,
+                    highlightSettings: highlightSettings
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
 
@@ -559,6 +593,19 @@ struct ContentView: View {
         }
 
         return result
+    }
+
+    func checkForKeywordMatches(in message: String) {
+        let enabledKeywords = highlightSettings.keywords.filter { $0.isEnabled && !$0.keyword.isEmpty && $0.isNotificationEnabled }
+
+        print("📨 Checking message: '\(message.prefix(50))...' against \(enabledKeywords.count) notification-enabled keywords")
+
+        for keyword in enabledKeywords {
+            if message.localizedCaseInsensitiveContains(keyword.keyword) {
+                print("🎯 Match found for keyword: '\(keyword.keyword)'")
+                highlightSettings.triggerNotification(for: keyword, text: message)
+            }
+        }
     }
 }
 

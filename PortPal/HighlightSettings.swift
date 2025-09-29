@@ -1,5 +1,8 @@
 import SwiftUI
 import Combine
+import UserNotifications
+import AudioToolbox
+import AppKit
 
 // 1. Codable을 지원하는 Color 표현을 위한 구조체
 // SwiftUI.Color는 직접 Codable을 준수하지 않으므로, RGBA 값으로 변환하여 저장합니다.
@@ -36,12 +39,14 @@ struct CodableColor: Codable, Hashable {
     }
 }
 
+
 // 2. 하이라이트 키워드와 색상을 정의하는 데이터 구조
 struct HighlightKeyword: Identifiable, Codable, Hashable {
     var id = UUID()
     var keyword: String
     var color: CodableColor
     var isEnabled: Bool = true
+    var isNotificationEnabled: Bool = false
 
     // color 프로퍼티를 직접 사용하기 위한 편의 프로퍼티
     var swiftUIColor: Color {
@@ -63,6 +68,7 @@ class HighlightSettings: ObservableObject {
 
     init() {
         load()
+        requestNotificationPermission()
     }
 
     // 기본값 설정
@@ -102,5 +108,147 @@ class HighlightSettings: ObservableObject {
         }
         // 저장된 데이터가 없으면 기본값 로드
         setDefaultKeywords()
+    }
+
+    // MARK: - 알림 기능
+
+    private func requestNotificationPermission() {
+        // 먼저 현재 권한 상태를 확인
+        UNUserNotificationCenter.current().getNotificationSettings { settings in
+            DispatchQueue.main.async {
+                print("📋 Current notification settings: \(settings.authorizationStatus.rawValue)")
+
+                switch settings.authorizationStatus {
+                case .authorized:
+                    print("✅ Notifications already authorized")
+                case .denied:
+                    print("❌ Notifications denied by user")
+                    print("💡 To enable notifications, go to System Settings > Notifications > PortPal")
+                    self.showNotificationPermissionAlert()
+                case .notDetermined:
+                    print("❓ Notification permission not determined, requesting...")
+                    UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { granted, error in
+                        DispatchQueue.main.async {
+                            if let error = error {
+                                print("❌ Notification permission error: \(error)")
+                            } else {
+                                print("✅ Notification permission granted: \(granted)")
+                            }
+                        }
+                    }
+                case .provisional:
+                    print("⚠️ Provisional authorization")
+                case .ephemeral:
+                    print("⏳ Ephemeral authorization")
+                @unknown default:
+                    print("❓ Unknown authorization status")
+                }
+            }
+        }
+    }
+
+    func triggerNotification(for keyword: HighlightKeyword, text: String) {
+        guard keyword.isEnabled && keyword.isNotificationEnabled else {
+            print("🔇 Notification skipped for '\(keyword.keyword)' - disabled")
+            return
+        }
+
+        print("🔔 Triggering banner notification for keyword: '\(keyword.keyword)'")
+        showBannerNotification(for: keyword, text: text)
+    }
+
+    private func showBannerNotification(for keyword: HighlightKeyword, text: String) {
+        print("📱 Creating banner notification for: \(keyword.keyword)")
+
+        // 먼저 UNUserNotification 시도
+        let content = UNMutableNotificationContent()
+        content.title = "키워드 감지: \(keyword.keyword)"
+        content.body = text.prefix(100).description + (text.count > 100 ? "..." : "")
+        content.sound = nil
+
+        let request = UNNotificationRequest(
+            identifier: "keyword-\(keyword.id.uuidString)-\(Date().timeIntervalSince1970)",
+            content: content,
+            trigger: nil
+        )
+
+        UNUserNotificationCenter.current().add(request) { error in
+            DispatchQueue.main.async {
+                if let error = error {
+                    print("❌ UNUserNotification error: \(error)")
+                    // UNUserNotification이 실패하면 간단한 알림 창으로 폴백
+                    self.showSimpleAlert(for: keyword, text: text)
+                } else {
+                    print("✅ UNUserNotification sent successfully")
+                }
+            }
+        }
+    }
+
+    private func showSimpleAlert(for keyword: HighlightKeyword, text: String) {
+        print("🪟 Showing simple alert as fallback")
+
+        DispatchQueue.main.async {
+            let alert = NSAlert()
+            alert.messageText = "키워드 감지: \(keyword.keyword)"
+            alert.informativeText = text.prefix(100).description + (text.count > 100 ? "..." : "")
+            alert.alertStyle = .informational
+            alert.addButton(withTitle: "확인")
+
+            // 앱이 백그라운드에 있어도 알림이 표시되도록
+            alert.runModal()
+        }
+    }
+
+    private func showNotificationPermissionAlert() {
+        DispatchQueue.main.async {
+            let alert = NSAlert()
+            alert.messageText = "알림 권한이 필요합니다"
+            alert.informativeText = "키워드 알림 기능을 사용하려면 시스템 설정에서 PortPal의 알림 권한을 허용해주세요.\n\n시스템 설정 > 알림 및 집중 모드 > PortPal에서 '알림 허용'을 켜주세요."
+            alert.alertStyle = .informational
+
+            let openSettingsButton = alert.addButton(withTitle: "시스템 설정 열기")
+            let cancelButton = alert.addButton(withTitle: "나중에")
+
+            openSettingsButton.keyEquivalent = "\r" // Enter키
+            cancelButton.keyEquivalent = "\u{1b}" // Escape키
+
+            let response = alert.runModal()
+
+            if response == .alertFirstButtonReturn {
+                // 시스템 설정 열기
+                self.openSystemNotificationSettings()
+            }
+        }
+    }
+
+    private func openSystemNotificationSettings() {
+        // macOS Ventura 이상에서는 새로운 설정 앱 경로
+        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.notifications") {
+            NSWorkspace.shared.open(url)
+        } else {
+            // 폴백: 일반 시스템 설정 열기
+            NSWorkspace.shared.open(URL(fileURLWithPath: "/System/Applications/System Preferences.app"))
+        }
+    }
+
+    private func playNotificationSound() {
+        print("🔊 Playing notification sound")
+
+        if let soundURL = Bundle.main.url(forResource: "notification", withExtension: "aiff") {
+            print("🎵 Using custom notification sound")
+            var soundID: SystemSoundID = 0
+            AudioServicesCreateSystemSoundID(soundURL as CFURL, &soundID)
+            AudioServicesPlaySystemSound(soundID)
+        } else {
+            print("🎵 Using system default sound")
+            // 기본 시스템 사운드 사용
+            AudioServicesPlaySystemSound(SystemSoundID(1000)) // 시스템 기본 알림음
+        }
+    }
+
+    // 수동으로 알림 권한 상태를 확인하는 함수 (UI에서 호출 가능)
+    func checkNotificationPermission() {
+        requestNotificationPermission()
     }
 }

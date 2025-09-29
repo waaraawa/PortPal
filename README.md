@@ -1,8 +1,19 @@
 Serial application app for Mac OS X
 
+### v1.2.0 To-Do
+- [ ] when app collect many logs then slow downed
+- History
+    - [ ] make history sorted by count, latest
+- Macro: new feature
+    - [ ] command, enable disable
+    - [ ] delay between commands
+    - [ ] repeat: duration, count
+- Ymodem: new feature
+    - [ ] send
+    - [ ] receive
+
 ### v1.1.0 To-Do
 - [x] add readme.md
-- [ ] when app collect many logs then slow downed
 - [x] Make hide/unhide option panels 
 - Ports
     - [x] open/close port by double click
@@ -10,10 +21,8 @@ Serial application app for Mac OS X
     - [x] port list refresh button
     - [x] move open close buttons to upside
 - Highlight
-    - [ ] specific keyword: make to notify if keyword found
-    - [ ] move add button to upside
-- History
-    - [ ] make history sorted by count, latest
+    - [x] specific keyword: make to notify if keyword found
+    - [x] move add button to upside
 - Output window
     - [x] screen clear
     - [x] make to copy text from log
@@ -23,13 +32,6 @@ Serial application app for Mac OS X
     - [x] continue scroll when scroll down to bottom again
     - [x] dim window when port closed
     - [x] set back ground color of command input textinput from gray to white
-- Macro: new feature
-    - [ ] command, enable disable
-    - [ ] delay between commands
-    - [ ] repeat: duration, count
-- Ymodem: new feature
-    - [ ] send
-    - [ ] receive
 
 ### v1.0.0 To-Do
 - Print time stamp include milli seconds
