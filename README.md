@@ -6,7 +6,7 @@ Serial application app for Mac OS X
 - [x] Make hide/unhide option panels 
 - Ports
     - [x] open/close port by double click
-    - [ ] CR, LF selectable
+    - [x] CR, LF selectable
     - [ ] port list refresh button
     - [x] move open close buttons to upside
 - Highlight

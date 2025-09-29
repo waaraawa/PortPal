@@ -175,6 +175,13 @@ struct ContentView: View {
                                 }
                             }
                             .onChange(of: serialPortManager.stopBits) { _, _ in serialPortManager.saveSettings() }
+
+                            Picker("Line Ending", selection: $serialPortManager.lineEnding) {
+                                ForEach(LineEnding.allCases) { ending in
+                                    Text(ending.rawValue).tag(ending)
+                                }
+                            }
+                            .onChange(of: serialPortManager.lineEnding) { _, _ in serialPortManager.saveSettings() }
                         }
                         .disabled(serialPortManager.isOpen)
                         .padding(.horizontal, 12)
@@ -391,7 +398,7 @@ struct ContentView: View {
 
         saveCommandHistory()
 
-        serialPortManager.send(trimmedCommand + "\n")
+        serialPortManager.send(trimmedCommand + serialPortManager.lineEnding.stringValue)
         isCommandFieldFocused = true
     }
 
@@ -399,8 +406,8 @@ struct ContentView: View {
         let trimmedCommand = command.trimmingCharacters(in: .whitespacesAndNewlines)
 
         if trimmedCommand.isEmpty {
-            // Send just line feed if command is empty
-            serialPortManager.send("\n")
+            // Send just line ending if command is empty
+            serialPortManager.send(serialPortManager.lineEnding.stringValue)
         } else {
             // Execute the command (which includes adding to history)
             executeCommand(command)

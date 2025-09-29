@@ -35,6 +35,25 @@ enum StopBits: Int, CaseIterable, Identifiable {
     var id: Int { self.rawValue }
 }
 
+enum LineEnding: String, CaseIterable, Identifiable {
+    case cr = "CR"
+    case lf = "LF"
+    case crlf = "CR+LF"
+
+    var id: String { self.rawValue }
+
+    var stringValue: String {
+        switch self {
+        case .cr:
+            return "\r"
+        case .lf:
+            return "\n"
+        case .crlf:
+            return "\r\n"
+        }
+    }
+}
+
 
 class SerialPortManager: ObservableObject {
     @Published var serialPorts: [String] = []
@@ -47,6 +66,7 @@ class SerialPortManager: ObservableObject {
     @Published var parity: Parity = .none
     @Published var dataBits: DataBits = .eight
     @Published var stopBits: StopBits = .one
+    @Published var lineEnding: LineEnding = .lf
 
     var onDataReceived: ((String) -> Void)?
 
@@ -60,6 +80,7 @@ class SerialPortManager: ObservableObject {
     private let parityKey = "serialParity"
     private let dataBitsKey = "serialDataBits"
     private let stopBitsKey = "serialStopBits"
+    private let lineEndingKey = "serialLineEnding"
 
     init() {
         loadSettings()
@@ -286,6 +307,9 @@ class SerialPortManager: ObservableObject {
         if let savedStopBits = UserDefaults.standard.value(forKey: stopBitsKey) as? Int {
             self.stopBits = StopBits(rawValue: savedStopBits) ?? .one
         }
+        if let savedLineEnding = UserDefaults.standard.string(forKey: lineEndingKey) {
+            self.lineEnding = LineEnding(rawValue: savedLineEnding) ?? .lf
+        }
     }
 
     func saveSettings() {
@@ -293,6 +317,7 @@ class SerialPortManager: ObservableObject {
         UserDefaults.standard.set(parity.rawValue, forKey: parityKey)
         UserDefaults.standard.set(dataBits.rawValue, forKey: dataBitsKey)
         UserDefaults.standard.set(stopBits.rawValue, forKey: stopBitsKey)
+        UserDefaults.standard.set(lineEnding.rawValue, forKey: lineEndingKey)
     }
 }
 
