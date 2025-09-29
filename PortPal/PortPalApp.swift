@@ -137,6 +137,7 @@ struct ContentView: View {
                 }
                 .pickerStyle(.segmented)
                 .padding(.horizontal)
+                .padding(.vertical)
 
                 // UI 모드에 따라 다른 뷰 표시
                 switch currentUIMode {
@@ -172,30 +173,8 @@ struct ContentView: View {
                             .onChange(of: serialPortManager.stopBits) { _, _ in serialPortManager.saveSettings() }
                         }
                         .disabled(serialPortManager.isOpen)
-                        
-                        List(selection: $selectedPortLocal) {
-                            ForEach(serialPortManager.serialPorts, id: \.self) { port in
-                                Text(port)
-                                    .listRowBackground(
-                                        (serialPortManager.connectedPortPath == port) ? Color.gray.opacity(0.3) : Color(NSColor.clear)
-                                    )
-                                    .tag(port)
-                            }
-                        }
-                        .onChange(of: selectedPortLocal) { _, newValue in
-                            DispatchQueue.main.async {
-                                serialPortManager.selectedPort = newValue
-                            }
-                        }
-                        .onChange(of: serialPortManager.selectedPort) { _, newValue in
-                            if selectedPortLocal != newValue {
-                                selectedPortLocal = newValue
-                            }
-                        }
-                        .onAppear {
-                            selectedPortLocal = serialPortManager.selectedPort
-                        }
-                        
+                        .padding(.horizontal, 12)
+
                         HStack(alignment: .center, spacing: 12) {
                             Button("Open") {
                                 if let port = serialPortManager.selectedPort {
@@ -211,8 +190,34 @@ struct ContentView: View {
                             .buttonStyle(.bordered)
                             .disabled(!serialPortManager.isOpen)
                         }
-                        .frame(height: 44)
-                        .padding(.horizontal, 12)
+                        .frame(height: 20)
+                        .padding(.horizontal)
+
+                        List(selection: $selectedPortLocal) {
+                            ForEach(serialPortManager.serialPorts, id: \.self) { port in
+                                Text(port)
+                                    .listRowBackground(
+                                        (serialPortManager.connectedPortPath == port) ? Color.gray.opacity(0.3) : Color(NSColor.clear)
+                                    )
+                                    .tag(port)
+                                    .onTapGesture(count: 2) {
+                                        handlePortDoubleClick(port: port)
+                                    }
+                            }
+                        }
+                        .onChange(of: selectedPortLocal) { _, newValue in
+                            DispatchQueue.main.async {
+                                serialPortManager.selectedPort = newValue
+                            }
+                        }
+                        .onChange(of: serialPortManager.selectedPort) { _, newValue in
+                            if selectedPortLocal != newValue {
+                                selectedPortLocal = newValue
+                            }
+                        }
+                        .onAppear {
+                            selectedPortLocal = serialPortManager.selectedPort
+                        }
                     }
                 case .highlightSettings:
                     HighlightSettingsView(settings: highlightSettings)
@@ -460,6 +465,21 @@ struct ContentView: View {
 
     func clearScreen() {
         logEntries.removeAll()
+    }
+
+    func handlePortDoubleClick(port: String) {
+        // 포트를 선택 상태로 만들기
+        serialPortManager.selectedPort = port
+        selectedPortLocal = port
+
+        // 해당 포트가 현재 연결된 포트인지 확인
+        if serialPortManager.connectedPortPath == port && serialPortManager.isOpen {
+            // 이미 열려있는 포트라면 닫기
+            serialPortManager.closePort()
+        } else {
+            // 닫혀있는 포트라면 열기
+            serialPortManager.openPort(path: port)
+        }
     }
 
     var logText: String {

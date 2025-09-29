@@ -5,10 +5,10 @@ Serial application app for Mac OS X
 - [ ] when app collect many logs then slow downed
 - [x] Make hide/unhide option panels 
 - Ports
-    - [ ] open/close port by double click
+    - [x] open/close port by double click
     - [ ] CR, LF selectable
     - [ ] port list refresh button
-    - [ ] move open close buttons to upside
+    - [x] move open close buttons to upside
 - Highlight
     - [ ] specific keyword: make to notify if keyword found
     - [ ] move add button to upside
@@ -21,6 +21,8 @@ Serial application app for Mac OS X
     - [x] command input border is too thick
     - [x] stop scroll when scroll up
     - [x] continue scroll when scroll down to bottom again
+    - [ ] dim window when port closed
+    - [x] set back ground color of command input textinput from gray to white
 - Macro: new feature
     - [ ] command, enable disable
     - [ ] delay between commands
