@@ -101,6 +101,11 @@ class SerialPortManager: ObservableObject {
             }
             DispatchQueue.main.async {
                 self.serialPorts = newPorts
+
+                // Clear selected port if it's no longer available
+                if let selectedPort = self.selectedPort, !newPorts.contains(selectedPort) {
+                    self.selectedPort = nil
+                }
             }
         }
     }

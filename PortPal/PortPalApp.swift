@@ -200,6 +200,11 @@ struct ContentView: View {
                             }
                             .buttonStyle(.bordered)
                             .disabled(!serialPortManager.isOpen)
+
+                            Button("Refresh") {
+                                serialPortManager.findSerialPorts()
+                            }
+                            .buttonStyle(.bordered)
                         }
                         .frame(height: 20)
                         .padding(.horizontal)
@@ -211,9 +216,18 @@ struct ContentView: View {
                                         (serialPortManager.connectedPortPath == port) ? Color.gray.opacity(0.3) : Color(NSColor.clear)
                                     )
                                     .tag(port)
-                                    .onTapGesture(count: 2) {
-                                        handlePortDoubleClick(port: port)
-                                    }
+                                    .contentShape(Rectangle())
+                                    .gesture(
+                                        TapGesture(count: 2)
+                                            .onEnded {
+                                                handlePortDoubleClick(port: port)
+                                            }
+                                            .exclusively(before: TapGesture(count: 1)
+                                                .onEnded {
+                                                    selectedPortLocal = port
+                                                }
+                                            )
+                                    )
                             }
                         }
                         .onChange(of: selectedPortLocal) { _, newValue in
@@ -224,6 +238,12 @@ struct ContentView: View {
                         .onChange(of: serialPortManager.selectedPort) { _, newValue in
                             if selectedPortLocal != newValue {
                                 selectedPortLocal = newValue
+                            }
+                        }
+                        .onChange(of: serialPortManager.serialPorts) { _, _ in
+                            // Ensure selectedPortLocal is in sync when port list changes
+                            if selectedPortLocal != serialPortManager.selectedPort {
+                                selectedPortLocal = serialPortManager.selectedPort
                             }
                         }
                         .onAppear {

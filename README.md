@@ -7,7 +7,7 @@ Serial application app for Mac OS X
 - Ports
     - [x] open/close port by double click
     - [x] CR, LF selectable
-    - [ ] port list refresh button
+    - [x] port list refresh button
     - [x] move open close buttons to upside
 - Highlight
     - [ ] specific keyword: make to notify if keyword found
