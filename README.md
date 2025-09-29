@@ -21,7 +21,7 @@ Serial application app for Mac OS X
     - [x] command input border is too thick
     - [x] stop scroll when scroll up
     - [x] continue scroll when scroll down to bottom again
-    - [ ] dim window when port closed
+    - [x] dim window when port closed
     - [x] set back ground color of command input textinput from gray to white
 - Macro: new feature
     - [ ] command, enable disable

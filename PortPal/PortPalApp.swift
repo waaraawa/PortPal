@@ -5,6 +5,7 @@ struct AutoScrollingTextEditor: NSViewRepresentable {
     @Binding var text: String
     let font: NSFont
     @Binding var shouldAutoScroll: Bool
+    let isPortOpen: Bool
 
     func makeCoordinator() -> Coordinator {
         Coordinator(self)
@@ -41,7 +42,7 @@ struct AutoScrollingTextEditor: NSViewRepresentable {
         textView.font = font
         textView.isEditable = false
         textView.isSelectable = true
-        textView.backgroundColor = NSColor.textBackgroundColor
+        textView.backgroundColor = isPortOpen ? NSColor.textBackgroundColor : NSColor.windowBackgroundColor
         textView.textContainerInset = CGSize(width: 8, height: 8)
 
         // Add scroll listener
@@ -57,6 +58,9 @@ struct AutoScrollingTextEditor: NSViewRepresentable {
 
     func updateNSView(_ nsView: NSScrollView, context: Context) {
         guard let textView = nsView.documentView as? NSTextView else { return }
+
+        // Update background color based on port status
+        textView.backgroundColor = isPortOpen ? NSColor.textBackgroundColor : NSColor.windowBackgroundColor
 
         if textView.string != text {
             textView.string = text
@@ -320,7 +324,8 @@ struct ContentView: View {
                 AutoScrollingTextEditor(
                     text: .constant(logText),
                     font: NSFont.monospacedSystemFont(ofSize: 11, weight: .regular),
-                    shouldAutoScroll: $isAutoScrollEnabled
+                    shouldAutoScroll: $isAutoScrollEnabled,
+                    isPortOpen: serialPortManager.isOpen
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
 
