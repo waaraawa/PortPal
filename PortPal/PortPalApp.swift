@@ -352,9 +352,11 @@ struct ContentView: View {
                         .foregroundColor(.primary)
                         .frame(height: 20)
                         .padding(.horizontal, 8)
+                        .background(Color.white)
+                        .cornerRadius(6)
                         .overlay(
                             RoundedRectangle(cornerRadius: 6)
-                                .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+                                .stroke(Color.white, lineWidth: 1)
                         )
                         .focused($isCommandFieldFocused)
                         .onSubmit {
