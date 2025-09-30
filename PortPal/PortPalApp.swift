@@ -127,7 +127,8 @@ struct ContentView: View {
     @StateObject private var highlightSettings = HighlightSettings()
     @State private var logEntries: [LogEntry] = []
     @State private var command: String = ""
-    @State private var commandHistory: [String]
+    @State private var commandHistory: [CommandHistoryItem] = []
+    @State private var historySortOption: HistorySortOption = .latest
     @FocusState private var isCommandFieldFocused: Bool
     @State private var currentUIMode: UIMode = .serialPortSelection
     @State private var isLeftPanelVisible = true
@@ -139,7 +140,8 @@ struct ContentView: View {
     @State private var logSaveURL: URL?
     @State private var logFilename: String = ""
 
-    private let commandHistoryKey = "commandHistory"
+    private let commandHistoryKey = "commandHistoryItems"
+    private let historySortOptionKey = "historySortOption"
     private let logSavePathKey = "logSavePathBookmark"
 
     private let dateFormatter: DateFormatter = {
@@ -149,8 +151,26 @@ struct ContentView: View {
     }()
 
     init() {
-        _commandHistory = State(initialValue: UserDefaults.standard.stringArray(forKey: commandHistoryKey) ?? [])
-        
+        // Load command history
+        if let data = UserDefaults.standard.data(forKey: commandHistoryKey),
+           let historyItems = try? JSONDecoder().decode([CommandHistoryItem].self, from: data) {
+            _commandHistory = State(initialValue: historyItems)
+        } else {
+            // Migrate old string array format if exists
+            if let oldHistory = UserDefaults.standard.stringArray(forKey: "commandHistory") {
+                let migratedItems = oldHistory.map { CommandHistoryItem(command: $0) }
+                _commandHistory = State(initialValue: migratedItems)
+            } else {
+                _commandHistory = State(initialValue: [])
+            }
+        }
+
+        // Load sort option
+        if let sortOptionRaw = UserDefaults.standard.string(forKey: historySortOptionKey),
+           let sortOption = HistorySortOption(rawValue: sortOptionRaw) {
+            _historySortOption = State(initialValue: sortOption)
+        }
+
         if let bookmarkData = UserDefaults.standard.data(forKey: logSavePathKey) {
             var isStale = false
             if let url = try? URL(resolvingBookmarkData: bookmarkData, options: .withSecurityScope, relativeTo: nil, bookmarkDataIsStale: &isStale), !isStale {
@@ -173,7 +193,7 @@ struct ContentView: View {
                 .padding(.horizontal)
                 .padding(.vertical)
 
-                // UI 모드에 따라 다른 뷰 표시
+                // Display different views based on UI mode
                 switch currentUIMode {
                 case .serialPortSelection:
                     VStack {
@@ -337,24 +357,51 @@ struct ContentView: View {
                     .onAppear(perform: generateFilename)
 
                 case .commandHistory:
-                    List {
-                        ForEach(commandHistory, id: \.self) { cmd in
-                            HStack {
-                                Button(action: {
-                                    executeCommand(cmd)
-                                }) {
-                                    Text(cmd)
-                                        .frame(maxWidth: .infinity, alignment: .leading)
+                    VStack {
+                        HStack {
+                            Text("Sort by:")
+                                .font(.caption)
+                            Picker("", selection: $historySortOption) {
+                                ForEach(HistorySortOption.allCases) { option in
+                                    Text(option.rawValue).tag(option)
                                 }
-                                .buttonStyle(.plain)
-                                Spacer()
-                                Button(action: {
-                                    removeCommandFromHistory(cmd)
-                                }) {
-                                    Image(systemName: "trash")
-                                        .foregroundColor(.red)
+                            }
+                            .pickerStyle(.segmented)
+                            .onChange(of: historySortOption) { _, _ in
+                                saveHistorySortOption()
+                            }
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.bottom, 8)
+
+                        List {
+                            ForEach(sortedCommandHistory) { item in
+                                HStack {
+                                    Button(action: {
+                                        executeCommand(item.command)
+                                    }) {
+                                        HStack {
+                                            Text(item.command)
+                                                .frame(maxWidth: .infinity, alignment: .leading)
+                                            Spacer()
+                                        }
+                                        .contentShape(Rectangle())
+                                    }
+                                    .buttonStyle(.plain)
+
+                                    Text("×\(item.usageCount)")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                        .padding(.horizontal, 4)
+
+                                    Button(action: {
+                                        removeCommandFromHistory(item.command)
+                                    }) {
+                                        Image(systemName: "trash")
+                                            .foregroundColor(.red)
+                                    }
+                                    .buttonStyle(.plain)
                                 }
-                                .buttonStyle(.plain)
                             }
                         }
                     }
@@ -440,15 +487,37 @@ struct ContentView: View {
         }
     }
 
+    var sortedCommandHistory: [CommandHistoryItem] {
+        switch historySortOption {
+        case .latest:
+            return commandHistory.sorted { $0.lastUsed < $1.lastUsed }
+        case .usageCount:
+            return commandHistory.sorted { $0.usageCount > $1.usageCount }
+        }
+    }
+
     func executeCommand(_ commandToExecute: String) {
         let trimmedCommand = commandToExecute.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedCommand.isEmpty else { return }
 
-        // Remove existing instances of the command from history
-        commandHistory.removeAll { $0 == trimmedCommand }
+        // Find existing command or create new one
+        if let existingIndex = commandHistory.firstIndex(where: { $0.command == trimmedCommand }) {
+            // Create a completely new item with incremented count
+            let newUsageCount = commandHistory[existingIndex].usageCount + 1
+            let updatedItem = CommandHistoryItem(
+                id: commandHistory[existingIndex].id,
+                command: trimmedCommand,
+                usageCount: newUsageCount,
+                lastUsed: Date()
+            )
 
-        // Add the new command to the end of the history
-        commandHistory.append(trimmedCommand)
+            // Remove old item and add new item (this forces SwiftUI to detect change)
+            commandHistory.remove(at: existingIndex)
+            commandHistory.insert(updatedItem, at: existingIndex)
+        } else {
+            let newItem = CommandHistoryItem(command: trimmedCommand)
+            commandHistory.append(newItem)
+        }
 
         saveCommandHistory()
 
@@ -523,12 +592,18 @@ struct ContentView: View {
     }
 
     func removeCommandFromHistory(_ commandToRemove: String) {
-        commandHistory.removeAll { $0 == commandToRemove }
+        commandHistory.removeAll { $0.command == commandToRemove }
         saveCommandHistory()
     }
 
     func saveCommandHistory() {
-        UserDefaults.standard.set(commandHistory, forKey: commandHistoryKey)
+        if let data = try? JSONEncoder().encode(commandHistory) {
+            UserDefaults.standard.set(data, forKey: commandHistoryKey)
+        }
+    }
+
+    func saveHistorySortOption() {
+        UserDefaults.standard.set(historySortOption.rawValue, forKey: historySortOptionKey)
     }
 
     func clearScreen() {
@@ -536,16 +611,16 @@ struct ContentView: View {
     }
 
     func handlePortDoubleClick(port: String) {
-        // 포트를 선택 상태로 만들기
+        // Set port to selected state
         serialPortManager.selectedPort = port
         selectedPortLocal = port
 
-        // 해당 포트가 현재 연결된 포트인지 확인
+        // Check if the port is currently connected
         if serialPortManager.connectedPortPath == port && serialPortManager.isOpen {
-            // 이미 열려있는 포트라면 닫기
+            // Close if port is already open
             serialPortManager.closePort()
         } else {
-            // 닫혀있는 포트라면 열기
+            // Open if port is closed
             serialPortManager.openPort(path: port)
         }
     }

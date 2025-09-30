@@ -3,7 +3,7 @@ Serial application app for Mac OS X
 ### v1.2.0 To-Do
 - [ ] when app collect many logs then slow downed
 - History
-    - [ ] make history sorted by count, latest
+    - [x] make history sorted by count, latest
 - Macro: new feature
     - [ ] command, enable disable
     - [ ] delay between commands

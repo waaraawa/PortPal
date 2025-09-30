@@ -35,7 +35,7 @@ struct HighlightSettingsView: View {
                                 .foregroundColor(keyword.isNotificationEnabled ? .blue : .gray)
                         }
                         .buttonStyle(.plain)
-                        .help(keyword.isNotificationEnabled ? "알림 비활성화" : "알림 활성화")
+                        .help(keyword.isNotificationEnabled ? "Disable notifications" : "Enable notifications")
 
                         Button(action: {
                             settings.remove(keyword: $keyword.wrappedValue)
@@ -44,7 +44,7 @@ struct HighlightSettingsView: View {
                                 .foregroundColor(.red)
                         }
                         .buttonStyle(.plain)
-                        .help("키워드 삭제")
+                        .help("Delete keyword")
                     }
                 }
             }

@@ -4,8 +4,8 @@ import UserNotifications
 import AudioToolbox
 import AppKit
 
-// 1. Codable을 지원하는 Color 표현을 위한 구조체
-// SwiftUI.Color는 직접 Codable을 준수하지 않으므로, RGBA 값으로 변환하여 저장합니다.
+// 1. Color structure supporting Codable
+// SwiftUI.Color doesn't directly conform to Codable, so we convert and store RGBA values.
 struct CodableColor: Codable, Hashable {
     var red: Double
     var green: Double
@@ -14,7 +14,7 @@ struct CodableColor: Codable, Hashable {
 
     init(color: Color) {
         let nsColor = NSColor(color)
-        // NSColor를 genericRGB 색상 공간으로 변환하여 RGBA 값을 얻을 수 있도록 함
+        // Convert NSColor to genericRGB color space to get RGBA values
         if let convertedColor = nsColor.usingColorSpace(.genericRGB) {
             var r: CGFloat = 0
             var g: CGFloat = 0
@@ -26,7 +26,7 @@ struct CodableColor: Codable, Hashable {
             self.blue = Double(b)
             self.opacity = Double(a)
         } else {
-            // 변환 실패 시 기본값 설정 (예: 검정색)
+            // Set default values on conversion failure (e.g., black)
             self.red = 0
             self.green = 0
             self.blue = 0
@@ -40,7 +40,7 @@ struct CodableColor: Codable, Hashable {
 }
 
 
-// 2. 하이라이트 키워드와 색상을 정의하는 데이터 구조
+// 2. Data structure defining highlight keywords and colors
 struct HighlightKeyword: Identifiable, Codable, Hashable {
     var id = UUID()
     var keyword: String
@@ -48,14 +48,14 @@ struct HighlightKeyword: Identifiable, Codable, Hashable {
     var isEnabled: Bool = true
     var isNotificationEnabled: Bool = false
 
-    // color 프로퍼티를 직접 사용하기 위한 편의 프로퍼티
+    // Convenience property to use color property directly
     var swiftUIColor: Color {
         get { color.color }
         set { color = CodableColor(color: newValue) }
     }
 }
 
-// 3. 하이라이트 설정을 관리하고 UserDefaults에 저장/로드하는 ViewModel
+// 3. ViewModel to manage highlight settings and save/load from UserDefaults
 @MainActor
 class HighlightSettings: ObservableObject {
     @Published var keywords: [HighlightKeyword] = [] {
@@ -71,7 +71,7 @@ class HighlightSettings: ObservableObject {
         requestNotificationPermission()
     }
 
-    // 기본값 설정
+    // Set default values
     private func setDefaultKeywords() {
         self.keywords = [
             HighlightKeyword(keyword: "Error", color: CodableColor(color: .red)),
@@ -106,14 +106,14 @@ class HighlightSettings: ObservableObject {
                 return
             }
         }
-        // 저장된 데이터가 없으면 기본값 로드
+        // Load default values if no saved data exists
         setDefaultKeywords()
     }
 
-    // MARK: - 알림 기능
+    // MARK: - Notification functionality
 
     private func requestNotificationPermission() {
-        // 먼저 현재 권한 상태를 확인
+        // First check current permission status
         UNUserNotificationCenter.current().getNotificationSettings { settings in
             DispatchQueue.main.async {
                 print("📋 Current notification settings: \(settings.authorizationStatus.rawValue)")
@@ -160,9 +160,9 @@ class HighlightSettings: ObservableObject {
     private func showBannerNotification(for keyword: HighlightKeyword, text: String) {
         print("📱 Creating banner notification for: \(keyword.keyword)")
 
-        // 먼저 UNUserNotification 시도
+        // First try UNUserNotification
         let content = UNMutableNotificationContent()
-        content.title = "키워드 감지: \(keyword.keyword)"
+        content.title = "Keyword Detected: \(keyword.keyword)"
         content.body = text.prefix(100).description + (text.count > 100 ? "..." : "")
         content.sound = nil
 
@@ -176,7 +176,7 @@ class HighlightSettings: ObservableObject {
             DispatchQueue.main.async {
                 if let error = error {
                     print("❌ UNUserNotification error: \(error)")
-                    // UNUserNotification이 실패하면 간단한 알림 창으로 폴백
+                    // Fallback to simple alert if UNUserNotification fails
                     self.showSimpleAlert(for: keyword, text: text)
                 } else {
                     print("✅ UNUserNotification sent successfully")
@@ -190,12 +190,12 @@ class HighlightSettings: ObservableObject {
 
         DispatchQueue.main.async {
             let alert = NSAlert()
-            alert.messageText = "키워드 감지: \(keyword.keyword)"
+            alert.messageText = "Keyword Detected: \(keyword.keyword)"
             alert.informativeText = text.prefix(100).description + (text.count > 100 ? "..." : "")
             alert.alertStyle = .informational
-            alert.addButton(withTitle: "확인")
+            alert.addButton(withTitle: "OK")
 
-            // 앱이 백그라운드에 있어도 알림이 표시되도록
+            // Show alert even when app is in background
             alert.runModal()
         }
     }
@@ -203,31 +203,31 @@ class HighlightSettings: ObservableObject {
     private func showNotificationPermissionAlert() {
         DispatchQueue.main.async {
             let alert = NSAlert()
-            alert.messageText = "알림 권한이 필요합니다"
-            alert.informativeText = "키워드 알림 기능을 사용하려면 시스템 설정에서 PortPal의 알림 권한을 허용해주세요.\n\n시스템 설정 > 알림 및 집중 모드 > PortPal에서 '알림 허용'을 켜주세요."
+            alert.messageText = "Notification Permission Required"
+            alert.informativeText = "To use keyword notification features, please allow PortPal's notification permission in System Settings.\n\nGo to System Settings > Notifications & Focus > PortPal and turn on 'Allow Notifications'."
             alert.alertStyle = .informational
 
-            let openSettingsButton = alert.addButton(withTitle: "시스템 설정 열기")
-            let cancelButton = alert.addButton(withTitle: "나중에")
+            let openSettingsButton = alert.addButton(withTitle: "Open System Settings")
+            let cancelButton = alert.addButton(withTitle: "Later")
 
-            openSettingsButton.keyEquivalent = "\r" // Enter키
-            cancelButton.keyEquivalent = "\u{1b}" // Escape키
+            openSettingsButton.keyEquivalent = "\r" // Enter key
+            cancelButton.keyEquivalent = "\u{1b}" // Escape key
 
             let response = alert.runModal()
 
             if response == .alertFirstButtonReturn {
-                // 시스템 설정 열기
+                // Open system settings
                 self.openSystemNotificationSettings()
             }
         }
     }
 
     private func openSystemNotificationSettings() {
-        // macOS Ventura 이상에서는 새로운 설정 앱 경로
+        // New Settings app path for macOS Ventura and later
         if let url = URL(string: "x-apple.systempreferences:com.apple.preference.notifications") {
             NSWorkspace.shared.open(url)
         } else {
-            // 폴백: 일반 시스템 설정 열기
+            // Fallback: Open general system settings
             NSWorkspace.shared.open(URL(fileURLWithPath: "/System/Applications/System Preferences.app"))
         }
     }
@@ -242,12 +242,12 @@ class HighlightSettings: ObservableObject {
             AudioServicesPlaySystemSound(soundID)
         } else {
             print("🎵 Using system default sound")
-            // 기본 시스템 사운드 사용
-            AudioServicesPlaySystemSound(SystemSoundID(1000)) // 시스템 기본 알림음
+            // Use default system sound
+            AudioServicesPlaySystemSound(SystemSoundID(1000)) // System default notification sound
         }
     }
 
-    // 수동으로 알림 권한 상태를 확인하는 함수 (UI에서 호출 가능)
+    // Function to manually check notification permission status (can be called from UI)
     func checkNotificationPermission() {
         requestNotificationPermission()
     }
