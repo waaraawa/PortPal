@@ -1,17 +1,19 @@
 Serial application app for Mac OS X
 
-### v1.2.0 To-Do
+### v1.3.0 To-Do
 - [ ] write app introduction in README.md
-- [ ] when app collect many logs then slow downed
+- Ymodem: new feature
+    - [ ] send
+    - [ ] receive
+
+### v1.2.0 To-Do
+- [x] when app collect many logs then slow downed
 - History
     - [x] make history sorted by count, latest
 - Macro: new feature
     - [x] command, enable disable
     - [x] delay between commands
     - [x] repeat: duration, count
-- Ymodem: new feature
-    - [ ] send
-    - [ ] receive
 
 ### v1.1.0 To-Do
 - [x] add readme.md

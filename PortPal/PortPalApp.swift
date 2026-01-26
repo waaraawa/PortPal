@@ -137,7 +137,12 @@ struct ContentView: View {
     @State private var selectedPortLocal: String?
     @State private var isAutoScrollEnabled = true
 
+    // Performance optimization: debouncing
+    @State private var pendingMessages: [LogEntry] = []
+    @State private var debounceWorkItem: DispatchWorkItem?
+
     private let maxLogEntries = 1000
+    private let debounceDelay: TimeInterval = 0.1  // 100ms debounce delay
     
     @State private var logSaveURL: URL?
     @State private var logFilename: String = ""
@@ -418,15 +423,29 @@ struct ContentView: View {
                 serialPortManager.onDataReceived = { message in
                     DispatchQueue.main.async {
                         let newEntry = LogEntry(timestamp: Date(), message: message)
-                        logEntries.append(newEntry)
-
-                        // Limit log entries to prevent performance issues
-                        if logEntries.count > maxLogEntries {
-                            logEntries.removeFirst(logEntries.count - maxLogEntries)
+                        pendingMessages.append(newEntry)
+                        
+                        // Cancel previous debounce work
+                        debounceWorkItem?.cancel()
+                        
+                        // Create new debounce work (execute after 100ms)
+                        let workItem = DispatchWorkItem {
+                            logEntries.append(contentsOf: pendingMessages)
+                            pendingMessages.removeAll()
+                            
+                            // Limit log entries to prevent performance issues
+                            if logEntries.count > maxLogEntries {
+                                logEntries.removeFirst(logEntries.count - maxLogEntries)
+                            }
+                            
+                            // Check for keyword matches (check last message only)
+                            if let lastMessage = logEntries.last {
+                                checkForKeywordMatches(in: lastMessage.message)
+                            }
                         }
-
-                        // Check for keyword matches and trigger notifications
-                        checkForKeywordMatches(in: message)
+                        
+                        debounceWorkItem = workItem
+                        DispatchQueue.main.asyncAfter(deadline: .now() + debounceDelay, execute: workItem)
                     }
                 }
             }
