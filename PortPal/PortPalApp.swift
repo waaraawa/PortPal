@@ -117,14 +117,16 @@ struct ContentView: View {
     enum UIMode: String, CaseIterable, Identifiable {
         case serialPortSelection = "Ports"
         case highlightSettings = "Highlight"
-        case logSave = "Log Save"
+        case logSave = "Log"
         case commandHistory = "History"
+        case macro = "Macro"
 
         var id: String { self.rawValue }
     }
 
     @StateObject private var serialPortManager = SerialPortManager()
     @StateObject private var highlightSettings = HighlightSettings()
+    @StateObject private var macroSettings = MacroSettings()
     @State private var logEntries: [LogEntry] = []
     @State private var command: String = ""
     @State private var commandHistory: [CommandHistoryItem] = []
@@ -405,9 +407,12 @@ struct ContentView: View {
                             }
                         }
                     }
+
+                case .macro:
+                    MacroSettingsView(settings: macroSettings, serialPortManager: serialPortManager)
                 }
             }
-            .frame(width: 250)
+            .frame(width: 300)
             .onAppear {
                 serialPortManager.findSerialPorts()
                 serialPortManager.onDataReceived = { message in
@@ -481,7 +486,7 @@ struct ContentView: View {
                 .padding(.horizontal, 12)
             }
         }
-        .frame(minWidth: 800, minHeight: 600)
+        .frame(minWidth: 850, minHeight: 600)
         .onAppear {
             isCommandFieldFocused = true
         }
@@ -673,11 +678,10 @@ struct ContentView: View {
     func checkForKeywordMatches(in message: String) {
         let enabledKeywords = highlightSettings.keywords.filter { $0.isEnabled && !$0.keyword.isEmpty && $0.isNotificationEnabled }
 
-        print("📨 Checking message: '\(message.prefix(50))...' against \(enabledKeywords.count) notification-enabled keywords")
+        guard !enabledKeywords.isEmpty else { return }
 
         for keyword in enabledKeywords {
             if message.localizedCaseInsensitiveContains(keyword.keyword) {
-                print("🎯 Match found for keyword: '\(keyword.keyword)'")
                 highlightSettings.triggerNotification(for: keyword, text: message)
             }
         }

@@ -211,7 +211,7 @@ class SerialPortManager: ObservableObject {
                         let lineData = self.readBuffer.subdata(in: 0..<range.upperBound)
                         self.readBuffer.removeSubrange(0..<range.upperBound)
 
-                        if let line = String(data: lineData, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines), !line.isEmpty {
+                        if let line = String(data: lineData, encoding: .utf8)?.trimmingCharacters(in: .newlines) {
                             DispatchQueue.main.async {
                                 self.onDataReceived?(line)
                             }
