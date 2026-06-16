@@ -14,24 +14,61 @@ struct AutoScrollingTextEditor: NSViewRepresentable {
 
     class Coordinator: NSObject {
         var parent: AutoScrollingTextEditor
+        var previousText = ""
+        var previousHighlightSignature = ""
+        var isProgrammaticScroll = false
 
         init(_ parent: AutoScrollingTextEditor) {
             self.parent = parent
         }
 
+        func update(parent: AutoScrollingTextEditor) {
+            self.parent = parent
+        }
+
         @objc func scrollViewDidScroll(_ notification: Notification) {
-            guard let scrollView = notification.object as? NSScrollView,
-                  let textView = scrollView.documentView as? NSTextView else { return }
+            guard !isProgrammaticScroll,
+                  let clipView = notification.object as? NSClipView,
+                  let scrollView = clipView.enclosingScrollView else { return }
 
-            let scrollPosition = scrollView.documentVisibleRect
-            let contentHeight = textView.frame.height
-            let visibleHeight = scrollView.frame.height
-
-            // Check if user is at or near the bottom
-            let isAtBottom = scrollPosition.origin.y + visibleHeight >= contentHeight - 50
+            let isAtBottom = Self.isAtBottom(scrollView)
 
             DispatchQueue.main.async {
                 self.parent.shouldAutoScroll = isAtBottom
+            }
+        }
+
+        static func isAtBottom(_ scrollView: NSScrollView) -> Bool {
+            guard let textView = scrollView.documentView as? NSTextView else { return true }
+
+            let visibleBottom = scrollView.contentView.bounds.maxY
+            let contentHeight = max(textView.bounds.height, scrollView.contentView.bounds.height)
+            return visibleBottom >= contentHeight - 24
+        }
+
+        func scrollToBottom(_ scrollView: NSScrollView) {
+            guard let textView = scrollView.documentView as? NSTextView else { return }
+
+            isProgrammaticScroll = true
+            if let textContainer = textView.textContainer {
+                textView.layoutManager?.ensureLayout(for: textContainer)
+            }
+            textView.scrollRangeToVisible(NSRange(location: textView.string.utf16.count, length: 0))
+            scrollView.reflectScrolledClipView(scrollView.contentView)
+
+            DispatchQueue.main.async {
+                self.isProgrammaticScroll = false
+                self.parent.shouldAutoScroll = Self.isAtBottom(scrollView)
+            }
+        }
+
+        func restoreVisibleOrigin(_ origin: NSPoint, in scrollView: NSScrollView) {
+            isProgrammaticScroll = true
+            scrollView.contentView.scroll(to: origin)
+            scrollView.reflectScrolledClipView(scrollView.contentView)
+
+            DispatchQueue.main.async {
+                self.isProgrammaticScroll = false
             }
         }
     }
@@ -45,45 +82,88 @@ struct AutoScrollingTextEditor: NSViewRepresentable {
         textView.isSelectable = true
         textView.backgroundColor = isPortOpen ? NSColor.textBackgroundColor : NSColor.windowBackgroundColor
         textView.textContainerInset = CGSize(width: 8, height: 8)
+        textView.allowsUndo = false
+        textView.textContainer?.lineFragmentPadding = 0
+        scrollView.contentView.postsBoundsChangedNotifications = true
 
         // Add scroll listener
         NotificationCenter.default.addObserver(
             context.coordinator,
             selector: #selector(Coordinator.scrollViewDidScroll(_:)),
-            name: NSScrollView.didLiveScrollNotification,
-            object: scrollView
+            name: NSView.boundsDidChangeNotification,
+            object: scrollView.contentView
         )
 
         return scrollView
     }
 
+    static func dismantleNSView(_ nsView: NSScrollView, coordinator: Coordinator) {
+        NotificationCenter.default.removeObserver(
+            coordinator,
+            name: NSView.boundsDidChangeNotification,
+            object: nsView.contentView
+        )
+    }
+
     func updateNSView(_ nsView: NSScrollView, context: Context) {
         guard let textView = nsView.documentView as? NSTextView else { return }
+        context.coordinator.update(parent: self)
 
         // Update background color based on port status
         textView.backgroundColor = isPortOpen ? NSColor.textBackgroundColor : NSColor.windowBackgroundColor
 
-        if textView.string != text {
-            // Apply highlighting to the text
-            applyHighlighting(to: textView, text: text)
+        let highlightSignature = self.highlightSignature
+        let textDidChange = context.coordinator.previousText != text
+        let highlightDidChange = context.coordinator.previousHighlightSignature != highlightSignature
 
-            if shouldAutoScroll {
-                DispatchQueue.main.async {
-                    textView.scrollToEndOfDocument(nil)
-                }
-            }
+        guard textDidChange || highlightDidChange else { return }
+
+        let wasAtBottom = shouldAutoScroll || Coordinator.isAtBottom(nsView)
+        let visibleOrigin = nsView.contentView.bounds.origin
+
+        if textDidChange,
+           !highlightDidChange,
+           text.hasPrefix(context.coordinator.previousText),
+           !context.coordinator.previousText.isEmpty {
+            appendHighlightedText(
+                to: textView,
+                text: String(text.dropFirst(context.coordinator.previousText.count))
+            )
+        } else {
+            applyHighlighting(to: textView, text: text)
+        }
+
+        context.coordinator.previousText = text
+        context.coordinator.previousHighlightSignature = highlightSignature
+
+        if text.isEmpty {
+            context.coordinator.restoreVisibleOrigin(.zero, in: nsView)
+        } else if wasAtBottom {
+            context.coordinator.scrollToBottom(nsView)
+        } else {
+            context.coordinator.restoreVisibleOrigin(visibleOrigin, in: nsView)
         }
     }
 
     private func applyHighlighting(to textView: NSTextView, text: String) {
+        textView.textStorage?.setAttributedString(attributedString(for: text))
+    }
+
+    private func appendHighlightedText(to textView: NSTextView, text: String) {
+        guard !text.isEmpty else { return }
+        textView.textStorage?.append(attributedString(for: text))
+    }
+
+    private func attributedString(for text: String) -> NSAttributedString {
         let attributedString = NSMutableAttributedString(string: text)
+        let fullRange = NSRange(location: 0, length: (text as NSString).length)
 
         // Set default attributes
         let defaultAttributes: [NSAttributedString.Key: Any] = [
             .font: font,
             .foregroundColor: NSColor.textColor
         ]
-        attributedString.setAttributes(defaultAttributes, range: NSRange(location: 0, length: text.count))
+        attributedString.setAttributes(defaultAttributes, range: fullRange)
 
         // Apply highlighting for enabled keywords
         let enabledKeywords = highlightSettings.keywords.filter { $0.isEnabled && !$0.keyword.isEmpty }
@@ -92,7 +172,7 @@ struct AutoScrollingTextEditor: NSViewRepresentable {
             let pattern = NSRegularExpression.escapedPattern(for: keyword.keyword)
             guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else { continue }
 
-            let matches = regex.matches(in: text, options: [], range: NSRange(location: 0, length: text.count))
+            let matches = regex.matches(in: text, options: [], range: fullRange)
 
             for match in matches {
                 let nsColor = NSColor(keyword.swiftUIColor)
@@ -100,7 +180,23 @@ struct AutoScrollingTextEditor: NSViewRepresentable {
             }
         }
 
-        textView.textStorage?.setAttributedString(attributedString)
+        return attributedString
+    }
+
+    private var highlightSignature: String {
+        highlightSettings.keywords
+            .map { keyword in
+                [
+                    keyword.id.uuidString,
+                    keyword.keyword,
+                    keyword.isEnabled.description,
+                    keyword.color.red.description,
+                    keyword.color.green.description,
+                    keyword.color.blue.description,
+                    keyword.color.opacity.description
+                ].joined(separator: ":")
+            }
+            .joined(separator: "|")
     }
 }
 
